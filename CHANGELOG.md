@@ -23,6 +23,7 @@ Categories Used:
 ### New Features
 
 - Add multithreading support for `zstd` compression [\#689](https://github.com/ouch-org/ouch/pull/689) ([nalabrie](https://github.com/nalabrie))
+- Add `bzip3` support [\#522](https://github.com/ouch-org/ouch/pull/522) ([freijon](https://github.com/freijon))
 
 ### Bug Fixes
 
@@ -32,6 +33,7 @@ Categories Used:
 
 - CI refactor [\#578](https://github.com/ouch-org/ouch/pull/578) ([cyqsimon](https://github.com/cyqsimon))
 - Use a more unique name for temporary decompression path [\#725](https://github.com/ouch-org/ouch/pull/725) ([valoq](https://github.com/valoq))
+- Run clippy for tests too [\#738](https://github.com/ouch-org/ouch/pull/738) ([marcospb19](https://github.com/marcospb19))
 
 ### Improvements
 

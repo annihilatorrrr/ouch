@@ -49,7 +49,7 @@ pub fn create_dir_if_non_existent(path: &Path) -> crate::Result<()> {
         fs::create_dir_all(path)?;
         // creating a directory is an important change to the file system we
         // should always inform the user about
-        info_accessible(format!("Directory {} created.", EscapedPathDisplay::new(path)));
+        info_accessible(format!("Directory {} created", EscapedPathDisplay::new(path)));
     }
     Ok(())
 }
@@ -82,6 +82,9 @@ pub fn try_infer_extension(path: &Path) -> Option<Extension> {
     fn is_bz2(buf: &[u8]) -> bool {
         buf.starts_with(&[0x42, 0x5A, 0x68])
     }
+    fn is_bz3(buf: &[u8]) -> bool {
+        buf.starts_with(bzip3::MAGIC_NUMBER)
+    }
     fn is_xz(buf: &[u8]) -> bool {
         buf.starts_with(&[0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00])
     }
@@ -95,6 +98,9 @@ pub fn try_infer_extension(path: &Path) -> Option<Extension> {
         buf.starts_with(&[0x28, 0xB5, 0x2F, 0xFD])
     }
     fn is_rar(buf: &[u8]) -> bool {
+        // ref https://www.rarlab.com/technote.htm#rarsign
+        // RAR 5.0 8 bytes length signature: 0x52 0x61 0x72 0x21 0x1A 0x07 0x01 0x00
+        // RAR 4.x 7 bytes length signature: 0x52 0x61 0x72 0x21 0x1A 0x07 0x00
         buf.len() >= 7
             && buf.starts_with(&[0x52, 0x61, 0x72, 0x21, 0x1A, 0x07])
             && (buf[6] == 0x00 || (buf.len() >= 8 && buf[6..=7] == [0x01, 0x00]))
@@ -125,6 +131,8 @@ pub fn try_infer_extension(path: &Path) -> Option<Extension> {
         Some(Extension::new(&[Gzip], "gz"))
     } else if is_bz2(&buf) {
         Some(Extension::new(&[Bzip], "bz2"))
+    } else if is_bz3(&buf) {
+        Some(Extension::new(&[Bzip3], "bz3"))
     } else if is_xz(&buf) {
         Some(Extension::new(&[Lzma], "xz"))
     } else if is_lz4(&buf) {
@@ -140,13 +148,4 @@ pub fn try_infer_extension(path: &Path) -> Option<Extension> {
     } else {
         None
     }
-}
-
-/// Returns true if a path is a symlink.
-/// This is the same as the nightly <https://doc.rust-lang.org/std/path/struct.Path.html#method.is_symlink>
-/// Useful to detect broken symlinks when compressing. (So we can safely ignore them)
-pub fn is_symlink(path: &Path) -> bool {
-    fs::symlink_metadata(path)
-        .map(|m| m.file_type().is_symlink())
-        .unwrap_or(false)
 }

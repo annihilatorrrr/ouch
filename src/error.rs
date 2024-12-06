@@ -32,7 +32,7 @@ pub enum Error {
     PermissionDenied { error_title: String },
     /// From zip::result::ZipError::UnsupportedArchive
     UnsupportedZipArchive(&'static str),
-    /// TO BE REMOVED
+    /// We don't support compressing the root folder.
     CompressingRootFolder,
     /// Specialized walkdir's io::Error wrapper with additional information on the error
     WalkdirError { reason: String },
@@ -196,6 +196,18 @@ impl From<std::io::Error> for Error {
             io::ErrorKind::PermissionDenied => Self::PermissionDenied { error_title },
             io::ErrorKind::AlreadyExists => Self::AlreadyExists { error_title },
             _other => Self::IoError { reason: error_title },
+        }
+    }
+}
+
+impl From<bzip3::Error> for Error {
+    fn from(err: bzip3::Error) -> Self {
+        use bzip3::Error as Bz3Error;
+        match err {
+            Bz3Error::Io(inner) => inner.into(),
+            Bz3Error::BlockSize | Bz3Error::ProcessBlock(_) | Bz3Error::InvalidSignature => {
+                FinalError::with_title("bzip3 error").detail(err.to_string()).into()
+            }
         }
     }
 }

@@ -78,7 +78,7 @@ pub fn decompress_file(
         // as screen readers may not read a commands exit code, making it hard to reason
         // about whether the command succeeded without such a message
         info_accessible(format!(
-            "Successfully decompressed archive in {} ({} files).",
+            "Successfully decompressed archive in {} ({} files)",
             nice_directory_display(output_dir),
             files_unpacked
         ));
@@ -100,6 +100,7 @@ pub fn decompress_file(
         let decoder: Box<dyn Read> = match format {
             Gzip => Box::new(flate2::read::GzDecoder::new(decoder)),
             Bzip => Box::new(bzip2::read::BzDecoder::new(decoder)),
+            Bzip3 => Box::new(bzip3::read::Bz3Decoder::new(decoder)?),
             Lz4 => Box::new(lz4_flex::frame::FrameDecoder::new(decoder)),
             Lzma => Box::new(xz2::read::XzDecoder::new(decoder)),
             Snappy => Box::new(snap::read::FrameDecoder::new(decoder)),
@@ -116,7 +117,7 @@ pub fn decompress_file(
     }
 
     let files_unpacked = match first_extension {
-        Gzip | Bzip | Lz4 | Lzma | Snappy | Zstd => {
+        Gzip | Bzip | Bzip3 | Lz4 | Lzma | Snappy | Zstd => {
             reader = chain_reader_decoder(&first_extension, reader)?;
 
             let mut writer = match utils::ask_to_create_file(&output_file_path, question_policy)? {
@@ -227,7 +228,7 @@ pub fn decompress_file(
     // as screen readers may not read a commands exit code, making it hard to reason
     // about whether the command succeeded without such a message
     info_accessible(format!(
-        "Successfully decompressed archive in {}.",
+        "Successfully decompressed archive in {}",
         nice_directory_display(output_dir)
     ));
     info_accessible(format!("Files unpacked: {}", files_unpacked));
@@ -252,14 +253,15 @@ fn smart_unpack(
     let temp_dir_path = temp_dir.path();
 
     info_accessible(format!(
-        "Created temporary directory {} to hold decompressed elements.",
+        "Created temporary directory {} to hold decompressed elements",
         nice_directory_display(temp_dir_path)
     ));
 
     let files = unpack_fn(temp_dir_path)?;
 
     let root_contains_only_one_element = fs::read_dir(temp_dir_path)?.count() == 1;
-    if root_contains_only_one_element {
+
+    let (previous_path, new_path) = if root_contains_only_one_element {
         // Only one file in the root directory, so we can just move it to the output directory
         let file = fs::read_dir(temp_dir_path)?.next().expect("item exists")?;
         let file_path = file.path();
@@ -267,31 +269,24 @@ fn smart_unpack(
             .file_name()
             .expect("Should be safe because paths in archives should not end with '..'");
         let correct_path = output_dir.join(file_name);
-        // Before moving, need to check if a file with the same name already exists
-        if !utils::clear_path(&correct_path, question_policy)? {
-            return Ok(ControlFlow::Break(()));
-        }
-        fs::rename(&file_path, &correct_path)?;
 
-        info_accessible(format!(
-            "Successfully moved {} to {}.",
-            nice_directory_display(&file_path),
-            nice_directory_display(&correct_path)
-        ));
+        (file_path, correct_path)
     } else {
-        // Multiple files in the root directory, so:
-        // Rename the temporary directory to the archive name, which is output_file_path
-        // One case to handle tough is we need to check if a file with the same name already exists
-        if !utils::clear_path(output_file_path, question_policy)? {
-            return Ok(ControlFlow::Break(()));
-        }
-        fs::rename(temp_dir_path, output_file_path)?;
-        info_accessible(format!(
-            "Successfully moved {} to {}.",
-            nice_directory_display(temp_dir_path),
-            nice_directory_display(output_file_path)
-        ));
+        (temp_dir_path.to_owned(), output_file_path.to_owned())
+    };
+
+    // Before moving, need to check if a file with the same name already exists
+    if !utils::clear_path(&new_path, question_policy)? {
+        return Ok(ControlFlow::Break(()));
     }
+
+    // Rename the temporary directory to the archive name, which is output_file_path
+    fs::rename(&previous_path, &new_path)?;
+    info_accessible(format!(
+        "Successfully moved \"{}\" to \"{}\"",
+        nice_directory_display(&previous_path),
+        nice_directory_display(&new_path),
+    ));
 
     Ok(ControlFlow::Continue(files))
 }

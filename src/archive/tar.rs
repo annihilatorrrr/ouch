@@ -54,7 +54,7 @@ pub fn unpack_archive(reader: Box<dyn Read>, output_folder: &Path, quiet: bool) 
 /// List contents of `archive`, returning a vector of archive entries
 pub fn list_archive(
     mut archive: tar::Archive<impl Read + Send + 'static>,
-) -> crate::Result<impl Iterator<Item = crate::Result<FileInArchive>>> {
+) -> impl Iterator<Item = crate::Result<FileInArchive>> {
     struct Files(Receiver<crate::Result<FileInArchive>>);
     impl Iterator for Files {
         type Item = crate::Result<FileInArchive>;
@@ -77,7 +77,7 @@ pub fn list_archive(
         }
     });
 
-    Ok(Files(rx))
+    Files(rx)
 }
 
 /// Compresses the archives given by `input_filenames` into the file given previously to `writer`.
@@ -109,7 +109,7 @@ where
             if let Ok(handle) = &output_handle {
                 if matches!(Handle::from_path(path), Ok(x) if &x == handle) {
                     warning(format!(
-                        "The output file and the input file are the same: `{}`, skipping...",
+                        "Cannot compress `{}` into itself, skipping",
                         output_path.display()
                     ));
 
@@ -122,7 +122,7 @@ where
             // spoken text for users using screen readers, braille displays
             // and so on
             if !quiet {
-                info(format!("Compressing '{}'.", EscapedPathDisplay::new(path)));
+                info(format!("Compressing '{}'", EscapedPathDisplay::new(path)));
             }
 
             if path.is_dir() {
@@ -131,9 +131,8 @@ where
                 let mut file = match fs::File::open(path) {
                     Ok(f) => f,
                     Err(e) => {
-                        if e.kind() == std::io::ErrorKind::NotFound && utils::is_symlink(path) {
-                            // This path is for a broken symlink
-                            // We just ignore it
+                        if e.kind() == std::io::ErrorKind::NotFound && path.is_symlink() {
+                            // This path is for a broken symlink, ignore it
                             continue;
                         }
                         return Err(e.into());

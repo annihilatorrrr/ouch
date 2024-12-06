@@ -20,7 +20,7 @@ use crate::{
     error::FinalError,
     list::FileInArchive,
     utils::{
-        self, cd_into_same_dir_as, get_invalid_utf8_paths,
+        cd_into_same_dir_as, get_invalid_utf8_paths,
         logger::{info, info_accessible, warning},
         pretty_format_list_of_paths, strip_cur_dir, Bytes, EscapedPathDisplay, FileVisibilityPolicy,
     },
@@ -105,7 +105,7 @@ where
 pub fn list_archive<R>(
     mut archive: ZipArchive<R>,
     password: Option<&[u8]>,
-) -> crate::Result<impl Iterator<Item = crate::Result<FileInArchive>>>
+) -> impl Iterator<Item = crate::Result<FileInArchive>>
 where
     R: Read + Seek + Send + 'static,
 {
@@ -145,7 +145,7 @@ where
         }
     });
 
-    Ok(Files(rx))
+    Files(rx)
 }
 
 /// Compresses the archives given by `input_filenames` into the file given previously to `writer`.
@@ -197,7 +197,7 @@ where
             if let Ok(handle) = &output_handle {
                 if matches!(Handle::from_path(path), Ok(x) if &x == handle) {
                     warning(format!(
-                        "The output file and the input file are the same: `{}`, skipping...",
+                        "Cannot compress `{}` into itself, skipping",
                         output_path.display()
                     ));
                 }
@@ -208,15 +208,14 @@ where
             // spoken text for users using screen readers, braille displays
             // and so on
             if !quiet {
-                info(format!("Compressing '{}'.", EscapedPathDisplay::new(path)));
+                info(format!("Compressing '{}'", EscapedPathDisplay::new(path)));
             }
 
             let metadata = match path.metadata() {
                 Ok(metadata) => metadata,
                 Err(e) => {
-                    if e.kind() == std::io::ErrorKind::NotFound && utils::is_symlink(path) {
-                        // This path is for a broken symlink
-                        // We just ignore it
+                    if e.kind() == std::io::ErrorKind::NotFound && path.is_symlink() {
+                        // This path is for a broken symlink, ignore it
                         continue;
                     }
                     return Err(e.into());
