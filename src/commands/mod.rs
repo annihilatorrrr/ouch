@@ -7,6 +7,7 @@ mod list;
 use std::{ops::ControlFlow, path::PathBuf};
 
 use bstr::ByteSlice;
+use decompress::DecompressOptions;
 use rayon::prelude::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use utils::colors;
 
@@ -52,6 +53,13 @@ pub fn run(
     question_policy: QuestionPolicy,
     file_visibility_policy: FileVisibilityPolicy,
 ) -> crate::Result<()> {
+    if let Some(threads) = args.threads {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build_global()
+            .unwrap();
+    }
+
     match args.cmd {
         Subcommand::Compress {
             files,
@@ -111,7 +119,7 @@ pub fn run(
                 // having a final status message is important especially in an accessibility context
                 // as screen readers may not read a commands exit code, making it hard to reason
                 // about whether the command succeeded without such a message
-                info_accessible(format!("Successfully compressed '{}'.", path_to_str(&output_path)));
+                info_accessible(format!("Successfully compressed '{}'", path_to_str(&output_path)));
             } else {
                 // If Ok(false) or Err() occurred, delete incomplete file at `output_path`
                 //
@@ -134,7 +142,11 @@ pub fn run(
 
             compress_result.map(|_| ())
         }
-        Subcommand::Decompress { files, output_dir } => {
+        Subcommand::Decompress {
+            files,
+            output_dir,
+            remove,
+        } => {
             let mut output_paths = vec![];
             let mut formats = vec![];
 
@@ -182,17 +194,18 @@ pub fn run(
                     } else {
                         output_dir.join(file_name)
                     };
-                    decompress_file(
-                        input_path,
+                    decompress_file(DecompressOptions {
+                        input_file_path: input_path,
                         formats,
-                        &output_dir,
+                        output_dir: &output_dir,
                         output_file_path,
                         question_policy,
-                        args.quiet,
-                        args.password.as_deref().map(|str| {
+                        quiet: args.quiet,
+                        password: args.password.as_deref().map(|str| {
                             <[u8] as ByteSlice>::from_os_str(str).expect("convert password to bytes failed")
                         }),
-                    )
+                        remove,
+                    })
                 })
         }
         Subcommand::List { archives: files, tree } => {

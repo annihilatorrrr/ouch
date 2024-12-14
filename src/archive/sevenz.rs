@@ -12,10 +12,10 @@ use same_file::Handle;
 use sevenz_rust::SevenZArchiveEntry;
 
 use crate::{
-    error::{Error, FinalError},
+    error::{Error, FinalError, Result},
     list::FileInArchive,
     utils::{
-        self, cd_into_same_dir_as,
+        cd_into_same_dir_as,
         logger::{info, warning},
         Bytes, EscapedPathDisplay, FileVisibilityPolicy,
     },
@@ -49,7 +49,7 @@ where
             if let Ok(handle) = &output_handle {
                 if matches!(Handle::from_path(path), Ok(x) if &x == handle) {
                     warning(format!(
-                        "The output file and the input file are the same: `{}`, skipping...",
+                        "Cannot compress `{}` into itself, skipping",
                         output_path.display()
                     ));
 
@@ -62,15 +62,14 @@ where
             // spoken text for users using screen readers, braille displays
             // and so on
             if !quiet {
-                info(format!("Compressing '{}'.", EscapedPathDisplay::new(path)));
+                info(format!("Compressing '{}'", EscapedPathDisplay::new(path)));
             }
 
             let metadata = match path.metadata() {
                 Ok(metadata) => metadata,
                 Err(e) => {
-                    if e.kind() == std::io::ErrorKind::NotFound && utils::is_symlink(path) {
-                        // This path is for a broken symlink
-                        // We just ignore it
+                    if e.kind() == std::io::ErrorKind::NotFound && path.is_symlink() {
+                        // This path is for a broken symlink, ignore it
                         continue;
                     }
                     return Err(e.into());
@@ -175,7 +174,7 @@ where
 pub fn list_archive(
     archive_path: &Path,
     password: Option<&[u8]>,
-) -> crate::Result<impl Iterator<Item = crate::Result<FileInArchive>>> {
+) -> Result<impl Iterator<Item = crate::Result<FileInArchive>>> {
     let reader = fs::File::open(archive_path)?;
 
     let mut files = Vec::new();
@@ -188,7 +187,7 @@ pub fn list_archive(
         Ok(true)
     };
 
-    let result = match password {
+    match password {
         Some(password) => {
             let password = match password.to_str() {
                 Ok(p) => p,
@@ -203,13 +202,9 @@ pub fn list_archive(
                 ".",
                 sevenz_rust::Password::from(password),
                 entry_extract_fn,
-            )
+            )?;
         }
-        None => sevenz_rust::decompress_with_extract_fn(reader, ".", entry_extract_fn),
-    };
-
-    if let Err(e) = result {
-        return Err(e.into());
+        None => sevenz_rust::decompress_with_extract_fn(reader, ".", entry_extract_fn)?,
     }
 
     Ok(files.into_iter())

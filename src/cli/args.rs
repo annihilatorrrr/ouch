@@ -5,7 +5,7 @@ use clap::{Parser, ValueHint};
 // Ouch command line options (docstrings below are part of --help)
 /// A command-line utility for easily compressing and decompressing files and directories.
 ///
-/// Supported formats: tar, zip, gz, 7z, xz/lzma, bz/bz2, lz4, sz (Snappy), zst and rar.
+/// Supported formats: tar, zip, gz, 7z, xz/lzma, bz/bz2, bz3, lz4, sz (Snappy), zst and rar.
 ///
 /// Repository: https://github.com/ouch-org/ouch
 #[derive(Parser, Debug, PartialEq)]
@@ -44,6 +44,10 @@ pub struct CliArgs {
     /// decompress or list with password
     #[arg(short = 'p', long = "password", global = true)]
     pub password: Option<OsString>,
+
+    /// cocurrent working threads
+    #[arg(short = 'c', long, global = true)]
+    pub threads: Option<usize>,
 
     // Ouch and claps subcommands
     #[command(subcommand)]
@@ -88,6 +92,10 @@ pub enum Subcommand {
         /// Place results in a directory other than the current one
         #[arg(short = 'd', long = "dir", value_hint = ValueHint::FilePath)]
         output_dir: Option<PathBuf>,
+
+        /// Remove the source file after successful decompression
+        #[arg(short = 'r', long)]
+        remove: bool,
     },
     /// List contents of an archive
     #[command(visible_aliases = ["l", "ls"])]
@@ -138,10 +146,12 @@ mod tests {
             format: None,
             // This is usually replaced in assertion tests
             password: None,
+            threads: None,
             cmd: Subcommand::Decompress {
                 // Put a crazy value here so no test can assert it unintentionally
                 files: vec!["\x00\x11\x22".into()],
                 output_dir: None,
+                remove: false,
             },
         }
     }
@@ -154,6 +164,7 @@ mod tests {
                 cmd: Subcommand::Decompress {
                     files: to_paths(["file.tar.gz"]),
                     output_dir: None,
+                    remove: false,
                 },
                 ..mock_cli_args()
             }
@@ -164,6 +175,7 @@ mod tests {
                 cmd: Subcommand::Decompress {
                     files: to_paths(["file.tar.gz"]),
                     output_dir: None,
+                    remove: false,
                 },
                 ..mock_cli_args()
             }
@@ -174,6 +186,7 @@ mod tests {
                 cmd: Subcommand::Decompress {
                     files: to_paths(["a", "b", "c"]),
                     output_dir: None,
+                    remove: false,
                 },
                 ..mock_cli_args()
             }
