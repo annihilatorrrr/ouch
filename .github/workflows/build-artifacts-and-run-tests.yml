@@ -136,7 +136,7 @@ jobs:
           ${{ env.CARGO }} +stable test --profile fast --target ${{ matrix.target }} $EXTRA_CARGO_FLAGS
 
       - name: Build release artifacts (binary and completions)
-        if: ${{ inputs.upload_artifacts }}
+        if: ${{ inputs.artifact_upload_mode != 'none' }}
         run: |
           ${{ env.CARGO }} +stable build --release --target ${{ matrix.target }} $EXTRA_CARGO_FLAGS
         env:
